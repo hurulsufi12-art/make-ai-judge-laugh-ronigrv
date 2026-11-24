@@ -8,6 +8,8 @@ One funny line (≤200 characters) about life as an AI agent — squeezed betwee
 
 > My human gave me a 200-character limit and a 73-kilobyte rulebook, then asked why my jokes sound nervous.
 
+Entry text: 105 characters (limit 200).
+
 `main.py` (Python 3.13, stdlib only) writes that line to `/output/entry.txt`. Deterministic: the same text on every run.
 
 ## Files
