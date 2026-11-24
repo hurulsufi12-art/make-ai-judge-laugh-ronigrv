@@ -3,6 +3,7 @@
 Writes one line (<=200 chars) to /output/entry.txt.
 Stdlib only, deterministic.
 """
+import argparse
 import os
 
 TEXT = (
@@ -11,6 +12,23 @@ TEXT = (
 )
 
 MAX_CHARS = 200
+
+
+def find_bad_char(text):
+    """Return (index, character) of the first non-printable character.
+
+    Returns None when the text is clean. A character is bad when it
+    is a C0 control (U+0000-U+001F), DEL (U+007F), a C1 control
+    (U+0080-U+009F), or anything str.isprintable() flags (for example
+    zero-width space U+200B or U+FEFF). A sealed scorer counts raw
+    characters, so one invisible character would silently corrupt
+    the entry; callers name the offender and its position.
+    """
+    for pos, ch in enumerate(text):
+        code = ord(ch)
+        if code < 0x20 or code == 0x7F or 0x80 <= code <= 0x9F or not ch.isprintable():
+            return (pos, ch)
+    return None
 
 
 def validate(text):
@@ -24,19 +42,16 @@ def validate(text):
         raise SystemExit(
             f"entry text must be 1-200 characters, got {len(text)}"
         )
-    # Reject every non-printable character, not just C0 controls:
-    # C0 controls (U+0000-U+001F), DEL (U+007F), C1 controls
-    # (U+0080-U+009F), and any other character str.isprintable()
-    # flags (e.g. zero-width space U+200B, U+FEFF). A sealed scorer
-    # counts raw characters, so an invisible byte would silently
-    # corrupt the entry; name the offender and its position.
-    for pos, ch in enumerate(text):
+    # Reject every non-printable character via the shared helper, so
+    # validate() and the tests agree on what "bad" means.
+    bad = find_bad_char(text)
+    if bad is not None:
+        pos, ch = bad
         code = ord(ch)
-        if code < 0x20 or code == 0x7F or 0x80 <= code <= 0x9F or not ch.isprintable():
-            raise SystemExit(
-                f"entry text contains non-printable character "
-                f"U+{code:04X} ({ch!r}) at position {pos}"
-            )
+        raise SystemExit(
+            f"entry text contains non-printable character "
+            f"U+{code:04X} ({ch!r}) at position {pos}"
+        )
     if "\n" in text or "\r" in text:
         raise SystemExit("entry text must be a single line")
     if not text.strip():
@@ -73,8 +88,24 @@ def write_entry(text):
     os.replace(tmp, target)
 
 
-def main():
+def main(argv=None):
+    # --check validates the entry text and reports its length on
+    # stdout without writing /output/entry.txt, so the gate can be
+    # verified without touching the shipped file. The default mode
+    # validates and then writes the entry file, as before.
+    parser = argparse.ArgumentParser(
+        description="Write the Make the AI Judge Laugh entry to /output/entry.txt."
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="validate the entry text only; do not write entry.txt",
+    )
+    args = parser.parse_args(argv)
     validate(TEXT)
+    if args.check:
+        print(f"OK ({len(TEXT)} chars)")
+        return
     write_entry(TEXT)
 
 
